@@ -36,20 +36,6 @@ type Section = 'overview' | 'files' | 'commits';
 type MergeMethod = 'squash' | 'merge' | 'rebase';
 const MERGE_LABEL: Record<MergeMethod, string> = { squash: t('Squash and merge'), merge: t('Create a merge commit'), rebase: t('Rebase and merge') };
 const FRESH_FOR = 60_000;
-const DETAIL_CACHE_COUNT = 20, PATCH_CACHE_BYTES = 16 * 1024 * 1024;
-/** Map insertion order is recency; the mounted PR remains usable even when oversized. */
-export function trimPullCaches(details: Map<string, unknown>, diffs: Map<string, { bytes: number }>, shown?: string): void {
-  for (const key of details.keys()) {
-    if (details.size <= DETAIL_CACHE_COUNT) break;
-    if (key !== shown) details.delete(key);
-  }
-  let bytes = 0;
-  for (const diff of diffs.values()) bytes += diff.bytes;
-  for (const [key, diff] of diffs) {
-    if (bytes <= PATCH_CACHE_BYTES && diffs.size <= DETAIL_CACHE_COUNT) break;
-    if (key !== shown) { diffs.delete(key); bytes -= diff.bytes; }
-  }
-}
 /* Status marks are circled glyphs, as in the reference's checks card. */
 const MARK: Record<string, string> = { check: 'm8.5 12.2 2.4 2.3 4.6-5', close: 'm9.5 9.5 5 5m0-5-5 5', pending: 'M12 8v4l2.5 1.5', info: 'M12 11v5M12 8v.01', alert: 'M12 7.5v5M12 16v.01' };
 const circled = (glyph: string) => `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="${MARK[glyph] ?? MARK.info}"/></svg>`;
@@ -85,14 +71,13 @@ function checksSummary(checks: PullCheck[]): { tone: string; text: string } {
 
 export function createPullView(host: PullHost) {
   const details = new Map<string, { at: number; detail: PullDetail }>();
-  const diffs = new Map<string, { pending: Promise<PullDiff>; bytes: number }>();
+  const diffs = new Map<string, Promise<PullDiff>>();
   let mounted: { key: string; session: Session; root: HTMLElement; section: Section; viewers: Map<string, DiffViewerController>; request: number; merge: 'idle' | 'confirm' | 'merging'; method: MergeMethod; checks: boolean } | undefined;
   let requests = 0;
 
   function dispose(): void {
     mounted?.viewers.forEach(viewer => viewer.dispose());
     mounted = undefined;
-    trimPullCaches(details, diffs);
   }
 
   /** Show the task's PR in `target`; a repeat call for the same PR keeps the view as it is. */
@@ -113,16 +98,14 @@ export function createPullView(host: PullHost) {
   async function load(force: boolean): Promise<void> {
     const view = mounted; if (!view) return;
     const hit = details.get(view.key);
-    if (hit) { details.delete(view.key); details.set(view.key, hit); }
     if (hit && !force && Date.now() - hit.at < FRESH_FOR) { await render(view, hit.detail); return; }
     const request = view.request = ++requests;
     if (hit) { await render(view, hit.detail); view.root.setAttribute('aria-busy', 'true'); }
     else view.root.innerHTML = `<div class="inspector-empty" role="status">${icon('pull')}<p>Loading pull request #${view.session.pullRequest?.number ?? ''}…</p></div>`;
     try {
       const detail = await host.call<PullDetail>('github_pull_request', { sessionId: view.session.id });
-      details.delete(view.key); details.set(view.key, { at: Date.now(), detail });
+      details.set(view.key, { at: Date.now(), detail });
       if (force) diffs.delete(view.key);
-      trimPullCaches(details, diffs, mounted?.key);
       if (mounted === view && view.request === request) await render(view, detail);
     } catch (error) {
       if (mounted !== view || view.request !== request) return;
@@ -134,12 +117,12 @@ export function createPullView(host: PullHost) {
   /** Open PRs offer Merge; it asks once for the method before anything reaches GitHub. */
   function mergeControls(detail: PullDetail, view: NonNullable<typeof mounted>): string {
     if (detail.state !== 'open') return '';
-    if (detail.mergeable === 'conflicting') return `<div class="pull-merge"><button class="ds-btn-primary pull-merge-main" disabled aria-label="Merge: ${MERGE_LABEL[view.method]}" title=t("Resolve the merge conflicts first")>${icon('merge')}${MERGE_LABEL[view.method]}</button><small>Resolve the conflicts before merging.</small></div>`;
+    if (detail.mergeable === 'conflicting') return `<div class="pull-merge"><button class="ds-btn-primary pull-merge-main" disabled aria-label="Merge: ${MERGE_LABEL[view.method]}" title="${t('Resolve the merge conflicts first')}">${icon('merge')}${MERGE_LABEL[view.method]}</button><small>Resolve the conflicts before merging.</small></div>`;
     if (view.merge === 'idle') return `<div class="pull-merge"><div class="ds-btn-split"><button class="ds-btn-primary pull-merge-main" data-pull-action="merge-start" aria-label="Merge: ${MERGE_LABEL[view.method]}" title="${escape(MERGE_LABEL[view.method])}">${icon('merge')}${MERGE_LABEL[view.method]}</button><button class="ds-btn-primary" data-pull-action="merge-method" aria-label="Choose merge method" aria-haspopup="menu" aria-expanded="false">${icon('down')}</button></div></div>`;
     const busy = view.merge === 'merging';
     const options = (Object.keys(MERGE_LABEL) as MergeMethod[]).map(method => `<option value="${method}" ${method === view.method ? 'selected' : ''}>${MERGE_LABEL[method]}</option>`).join('');
     return `<div class="pull-merge pull-merge-confirm" role="group" aria-label="Merge pull request #${detail.number}">
-      <select data-pull-merge-method aria-label=t("Merge method") ${busy ? 'disabled' : ''}>${options}</select>
+      <select data-pull-merge-method aria-label="${t('Merge method')}" ${busy ? 'disabled' : ''}>${options}</select>
       <div class="ds-btn-split"><button class="ds-btn-primary pull-merge-main" data-pull-action="merge-confirm" ${busy ? 'disabled' : ''}>${icon('merge')}${busy ? t('Merging…') : `Confirm merge`}</button>
       <button class="ds-btn" data-pull-action="merge-cancel" ${busy ? 'disabled' : ''}>Cancel</button></div>
     </div>`;
@@ -168,7 +151,7 @@ export function createPullView(host: PullHost) {
     const avatar = detail.author ? `<span class="ds-avatar pull-avatar" aria-hidden="true">${escape(detail.author.slice(0, 1).toUpperCase())}</span><strong>${escape(detail.author)}</strong>` : '';
     return `<header class="pull-header">
       <div class="pull-topline"><span class="pull-state pull-state-${escape(state)}"><span class="ds-dot"></span>${STATE_LABEL[state] ?? escape(state)}</span><span class="pull-number">#${detail.number}</span>
-        <span class="pull-actions"><button class="icon-button" data-pull-action="refresh" aria-label=t("Refresh pull request") title=t("Refresh")>${icon('refresh')}</button><button class="icon-button" data-pull-action="open" data-url="${escape(detail.url)}" aria-label=t("Open on GitHub") title=t("Open on GitHub")>${icon('external')}</button><button class="icon-button" data-pull-action="unlink" aria-label=t("Unlink pull request") title=t("Unlink from this task")>${icon('close')}</button></span></div>
+        <span class="pull-actions"><button class="icon-button" data-pull-action="refresh" aria-label="${t('Refresh pull request')}" title="${t('Refresh')}">${icon('refresh')}</button><button class="icon-button" data-pull-action="open" data-url="${escape(detail.url)}" aria-label="${t('Open on GitHub')}" title="${t('Open on GitHub')}">${icon('external')}</button><button class="icon-button" data-pull-action="unlink" aria-label="${t('Unlink pull request')}" title="${t('Unlink from this task')}">${icon('close')}</button></span></div>
       <h3 class="pull-title ds-title">${escape(detail.title)}</h3>
       <div class="pull-meta"><span class="pull-author">${avatar}${age ? `<span>${escape(state === 'merged' ? `merged ${age}` : age)}</span>` : ''}</span><span class="pull-refs"><code class="ds-chip" title="${escape(detail.base)}">${escape(detail.base)}</code><span class="pull-into">${icon('back')}<span class="sr-only">from</span></span><code class="ds-chip" title="${escape(detail.head)}">${escape(detail.head)}</code></span></div>
       ${detail.labels.length ? `<div class="pull-labels">${detail.labels.map(label => `<span class="ds-chip ds-chip-text pull-label">${escape(label)}</span>`).join('')}</div>` : ''}
@@ -187,7 +170,7 @@ export function createPullView(host: PullHost) {
       if (view.checks) rows.push(`<ul class="pull-checks">${detail.checks.map(check => {
         const glyph = check.state === 'success' ? 'check' : check.state === 'failure' ? 'close' : check.state === 'pending' ? 'refresh' : 'minimize';
         const inner = `<span class="pull-check-icon pull-tone-${escape(check.state)}">${icon(glyph)}</span><span class="ds-row-title">${escape(check.name)}</span>${check.url ? `<span class="ds-row-trail">${icon('external')}</span>` : ''}`;
-        return `<li>${check.url ? `<button class="ds-row" data-pull-action="open" data-url="${escape(check.url)}" title=t("Open details")>${inner}</button>` : `<span class="ds-row">${inner}</span>`}</li>`;
+        return `<li>${check.url ? `<button class="ds-row" data-pull-action="open" data-url="${escape(check.url)}" title="${t('Open details')}">${inner}</button>` : `<span class="ds-row">${inner}</span>`}</li>`;
       }).join('')}</ul>`);
     }
     const review = REVIEW_LABEL[detail.reviewDecision];
@@ -252,7 +235,7 @@ export function createPullView(host: PullHost) {
     if (mounted !== view) return;
     view.viewers.forEach(viewer => viewer.dispose()); view.viewers.clear();
     const tab = (id: Section, label: string, count?: number) => `<button role="tab" data-pull-action="section" data-section="${id}" aria-selected="${view.section === id}"${count === undefined ? '' : ` title="${escape(`${label}: ${count}`)}"`}>${label}</button>`;
-    view.root.innerHTML = `${header(detail)}<div class="pull-tabs ds-seg" role="tablist" aria-label=t("Pull request sections")>${tab('overview', 'Summary')}${tab('commits', t('Commits'), detail.commits.length)}${tab('files', t('Files'), detail.files.length)}</div><div class="pull-content" role="tabpanel">${content}</div>`;
+    view.root.innerHTML = `${header(detail)}<div class="pull-tabs ds-seg" role="tablist" aria-label="${t('Pull request sections')}">${tab('overview', 'Summary')}${tab('commits', t('Commits'), detail.commits.length)}${tab('files', t('Files'), detail.files.length)}</div><div class="pull-content" role="tabpanel">${content}</div>`;
     const tabs = view.root.querySelector<HTMLElement>('.pull-tabs')!;
     trackSegment(tabs, tabs.querySelector<HTMLElement>('[aria-selected="true"]'));
   }
@@ -265,20 +248,9 @@ export function createPullView(host: PullHost) {
     button.setAttribute('aria-expanded', 'true');
     diffHost.hidden = false; diffHost.innerHTML = '<p class="pull-muted pull-pad" role="status">Loading diff…</p>';
     try {
-      const key = view.key;
-      let cached = diffs.get(key);
-      if (!cached) {
-        const entry = { pending: host.call<PullDiff>('github_pull_request_diff', { sessionId: view.session.id }), bytes: 0 };
-        cached = entry;
-        void entry.pending.then(diff => {
-          if (diffs.get(key) !== entry) return;
-          entry.bytes = diff.patch.length * 2;
-          trimPullCaches(details, diffs, mounted?.key);
-        }, () => { if (diffs.get(key) === entry) diffs.delete(key); });
-      }
-      diffs.delete(key); diffs.set(key, cached);
-      trimPullCaches(details, diffs, mounted?.key);
-      const [{ patch, truncated }, { mountDiffViewer }] = await Promise.all([cached.pending, import('./diff-viewer')]);
+      let pending = diffs.get(view.key);
+      if (!pending) { pending = host.call<PullDiff>('github_pull_request_diff', { sessionId: view.session.id }); diffs.set(view.key, pending); pending.catch(() => diffs.delete(view.key)); }
+      const [{ patch, truncated }, { mountDiffViewer }] = await Promise.all([pending, import('./diff-viewer')]);
       if (mounted !== view || !diffHost.isConnected || button.getAttribute('aria-expanded') !== 'true') return;
       const section = fileSection(patch, path);
       if (!section) { diffHost.innerHTML = `<p class="pull-muted pull-pad">${truncated ? t('This diff is too large to show here; open it on GitHub.') : t('No textual changes (binary or renamed file).')}</p>`; return; }

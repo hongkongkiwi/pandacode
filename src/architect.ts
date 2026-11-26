@@ -49,7 +49,7 @@ export function openArchitectSetup(anchor: HTMLElement, load: () => Promise<Setu
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', t('Architect & workers'));
   panel.tabIndex = -1;
-  panel.innerHTML = `<header class="architect-setup-heading"><h2>Architect & workers</h2><button type="button" class="icon-button" aria-label=t("Close dialog")>${icon('close')}</button></header><div class="architect-setup-scroll"><div id="architect-setup-host"><p class="architect-loading" role="status">Loading team setup…</p></div></div>`;
+  panel.innerHTML = `<header class="architect-setup-heading"><h2>Architect & workers</h2><button type="button" class="icon-button" aria-label="${t('Close dialog')}">${icon('close')}</button></header><div class="architect-setup-scroll"><div id="architect-setup-host"><p class="architect-loading" role="status">Loading team setup…</p></div></div>`;
   const host = panel.querySelector<HTMLElement>('#architect-setup-host')!;
   let closed = false, frame = 0, setup: SetupController | undefined;
   const expanded = anchor.getAttribute('aria-expanded'), controls = anchor.getAttribute('aria-controls');
@@ -694,7 +694,10 @@ export class ArchitectView {
             const current = this.live.get(worker.sessionId);
             if (tool.status !== 'running' && current?.tools.get(tool.id)?.status === 'running') current.tools.set(tool.id, tool);
             article.dataset.savedToolId = tool.id; article.innerHTML = renderToolActivity(tool, 'tool:' + tool.id); } else article.textContent = message.content; }
-        else { const label = document.createElement('small'); label.textContent = message.role === 'assistant' ? worker.name : message.role === 'user' ? 'Assignment' : 'Activity'; const body = document.createElement('div'); article.append(label, body); bindFileLinkContext(body, fileContext); paints.push(markdown(body, message.content, scroll));
+        else {
+          const label = document.createElement('small'); label.textContent = message.role === 'assistant' ? worker.name : message.role === 'user' ? 'Assignment' : 'Activity';
+          const body = document.createElement('div'); body.className = 'markdown';
+          article.append(label, body); bindFileLinkContext(body, fileContext); paints.push(markdown(body, message.content, scroll));
           if (message.role === 'user' || message.role === 'assistant') {
             article.insertAdjacentHTML('beforeend', messageActionsHtml(worker.sessionId, message.id, Boolean(this.options.onFork) && message.id > 0 && !this.options.remote?.(taskId)));
           }
