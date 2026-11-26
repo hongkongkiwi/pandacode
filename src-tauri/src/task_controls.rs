@@ -253,17 +253,12 @@ pub(super) async fn set_task_preference(
     if state.store.lock().map_err(|e| e.to_string())?.session(&session_id)?.provider == "claude" {
         // Claude reads fast mode at launch, so the choice applies from the next turn.
         let delta = json!({"serviceTier": claude_tier(request)?});
-        let session = {
-            let store = state.store.lock().map_err(|e| e.to_string())?;
-            save_preference(&store, &session_id, &delta)?
-        };
-        let running = crate::run_requests::lock_agents(&state.agents).map_err(|e| e.to_string())?.contains_key(&session_id);
-        if !running {
-            crate::providers::discard_warm_agent(&session_id);
-        }
-        return Ok(session);
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        return save_preference(&store, &session_id, &delta);
     }
-    let running = crate::run_requests::lock_agents(&state.agents)
+    let running = state
+        .agents
+        .lock()
         .map_err(|e| e.to_string())?
         .contains_key(&session_id);
     // An idle task is reserved through catalog discovery and persistence. Live
@@ -299,21 +294,15 @@ pub(super) async fn set_task_preference(
     if running {
         live_request(&state, &session_id, "thread/settings/update", delta.clone()).await?;
     }
-    let session = {
-        let store = state.store.lock().map_err(|e| e.to_string())?;
-        let current = store.session(&session_id)?;
-        if current.provider != task.provider
-            || current.model != task.model
-            || current.reasoning_effort != task.reasoning_effort
-        {
-            return Err("The task's model changed. Open its settings again.".into());
-        }
-        save_preference(&store, &session_id, &delta)?
-    };
-    if !running {
-        crate::providers::discard_warm_agent(&session_id);
+    let store = state.store.lock().map_err(|e| e.to_string())?;
+    let current = store.session(&session_id)?;
+    if current.provider != task.provider
+        || current.model != task.model
+        || current.reasoning_effort != task.reasoning_effort
+    {
+        return Err("The task's model changed. Open its settings again.".into());
     }
-    Ok(session)
+    save_preference(&store, &session_id, &delta)
 }
 
 fn save_preference(store: &Store, sid: &str, delta: &Value) -> Result<Session> {
@@ -690,6 +679,9 @@ pub(super) async fn start_harness_terminal(
             ensure_console_goal_inactive(goal.as_ref())?;
         }
     }
+    // Stop any lingering ACP process (e.g. `agy acp`) before opening an interactive console so
+    // the resumed CLI does not contend on the harness's SQLite/conversation store.
+    crate::providers::end_lingering(&session_id).await;
     blocking(move || {
         let active = crate::run_requests::lock_agents(&lease.agents).map_err(|error| error.to_string())?;
         if app.state::<AppState>().shutdown.load(Ordering::SeqCst) != 0 {

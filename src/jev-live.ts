@@ -30,7 +30,7 @@ export async function mountJevLive(host: HTMLElement, options: Options): Promise
   host.className = 'jev-live'; host.hidden = true;
   host.setAttribute('role', 'region'); host.setAttribute('aria-label', t('Jev live browser'));
   host.innerHTML = `<header class="jev-live-heading"><span class="jev-live-mark">${icon('spark')}</span><strong>Jev</strong><span class="jev-live-status" role="status"></span><button type="button" class="jev-live-stop" data-jev-live-stop>${icon('stop')}${t('Stop test')}</button><button type="button" class="browser-tool" data-jev-live-return aria-label="${t('Return to browser')}" title="${t('Return to browser')}">${icon('back')}</button></header>
-    <div class="jev-live-run-picker" hidden><select aria-label="${t('Jev run')}"></select>${icon('down')}</div>
+    <div class="jev-live-run-picker" hidden><select aria-label="${t('Jev run')}"></select></div>
     <div class="jev-live-context"><strong class="jev-live-goal"></strong><span class="jev-live-url"></span></div>
     <figure class="jev-live-screen"><img alt="${t('Jev browser live view')}" hidden><div class="jev-live-waiting">${icon('globe')}<span>${t('Waiting for the browser…')}</span></div><figcaption>${t('Live browser · read only')}</figcaption></figure>
     <div class="jev-live-progress"><span class="jev-live-step"></span><p class="jev-live-current"></p></div>
