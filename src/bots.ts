@@ -178,7 +178,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
   host.classList.toggle('bots-single', single);
   host.innerHTML = single
     ? '<section class="bots-detail" aria-live="polite"></section>'
-    : '<aside class="bots-list" aria-label=t("Bots")></aside><section class="bots-detail" aria-live="polite"></section>';
+    : `<aside class="bots-list" aria-label="${t('Bots')}"></aside><section class="bots-detail" aria-live="polite"></section>`;
   const list = host.querySelector<HTMLElement>('.bots-list');
   const pane = host.querySelector<HTMLElement>('.bots-detail')!;
 
@@ -274,8 +274,8 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
 
   function renderList(): void {
     if (!list) return;
-    const rows = bots.map(bot => `<button type="button" class="bots-row" data-bot="${escape(bot.id)}" aria-current="${bot.id === selected && editing !== 'new'}">${avatar(bot)}<span class="bots-row-text"><b>${escape(bot.name)}</b><small>${escape(bot.paused ? t('Paused') : working(bot) ? t('Working…') : bot.role || t('Ready'))}</small></span>${bot.paused ? `<span class="bots-dot paused" title=t("Paused")></span>` : working(bot) ? '<span class="bots-dot working" title=t("Working")></span>' : ''}</button>`).join('');
-    list.innerHTML = `<div class="bots-list-head"><span>Bots</span><button type="button" class="icon-button" data-bots-action="new" aria-label=t("New bot") title=t("New bot")>${icon('plus')}</button></div><div class="bots-rows">${rows || '<p class="bots-empty-note">No bots yet.</p>'}</div>`;
+    const rows = bots.map(bot => `<button type="button" class="bots-row" data-bot="${escape(bot.id)}" aria-current="${bot.id === selected && editing !== 'new'}">${avatar(bot)}<span class="bots-row-text"><b>${escape(bot.name)}</b><small>${escape(bot.paused ? t('Paused') : working(bot) ? t('Working…') : bot.role || t('Ready'))}</small></span>${bot.paused ? `<span class="bots-dot paused" title="${t('Paused')}"></span>` : working(bot) ? `<span class="bots-dot working" title="${t('Working')}"></span>` : ''}</button>`).join('');
+    list.innerHTML = `<div class="bots-list-head"><span>Bots</span><button type="button" class="icon-button" data-bots-action="new" aria-label="${t('New bot')}" title="${t('New bot')}">${icon('plus')}</button></div><div class="bots-rows">${rows || '<p class="bots-empty-note">No bots yet.</p>'}</div>`;
   }
 
   function catalogFor(provider: ProviderId): ProviderModel[] { return modelCatalogs.get(provider) ?? options.providers.find(item => item.id === provider)?.models ?? []; }
@@ -285,7 +285,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
   function effortSelect(provider: ProviderId, model: string, current: string): string {
     const levels: ReasoningEffort[] = catalogFor(provider).find(item => item.id === model)?.reasoningEfforts ?? [];
     const all = current && !levels.some(item => item.id === current) ? [...levels, { id: current, name: current, description: '' }] : levels;
-    return `<select name="reasoningEffort" aria-label=t("Reasoning") ${all.length ? '' : 'disabled'}><option value="">Default</option>${all.map(item => `<option value="${escape(item.id)}" ${item.id === current ? 'selected' : ''}>${escape(item.name)}</option>`).join('')}</select>`;
+    return `<select name="reasoningEffort" aria-label="${t('Reasoning')}" ${all.length ? '' : 'disabled'}><option value="">Default</option>${all.map(item => `<option value="${escape(item.id)}" ${item.id === current ? 'selected' : ''}>${escape(item.name)}</option>`).join('')}</select>`;
   }
   function syncEfforts(form: HTMLFormElement): void {
     const select = form.querySelector<HTMLSelectElement>('select[name=reasoningEffort]');
@@ -304,8 +304,8 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
     const wrap = (title: string, control: string) => labelled ? `<label class="bc-control"><span>${title}</span>${control}</label>` : control;
     return {
       provider,
-      harness: wrap(t('Harness'), `<select name="provider" aria-label=t("Harness")>${providers.map(item => `<option value="${item.id}" ${item.id === provider?.id ? 'selected' : ''} ${!item.installed && hasInstalledProvider ? 'disabled' : ''}>${escape(item.name)}${!item.installed ? t(' · Not installed') : ''}</option>`).join('')}</select>`),
-      model: wrap(t('Model'), `<select name="model" aria-label=t("Model") data-preferred-model="${escape(preferred)}">${provider ? modelOptions(provider.id, models, shown) : '<option value="default">Default</option>'}</select>`),
+      harness: wrap(t('Harness'), `<select name="provider" aria-label="${t('Harness')}">${providers.map(item => `<option value="${item.id}" ${item.id === provider?.id ? 'selected' : ''} ${!item.installed && hasInstalledProvider ? 'disabled' : ''}>${escape(item.name)}${!item.installed ? t(' · Not installed') : ''}</option>`).join('')}</select>`),
+      model: wrap(t('Model'), `<select name="model" aria-label="${t('Model')}" data-preferred-model="${escape(preferred)}">${provider ? modelOptions(provider.id, models, shown) : '<option value="default">Default</option>'}</select>`),
     };
   }
 
@@ -314,7 +314,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
     const { provider, harness, model } = harnessControls(draft.provider, draft.model);
     const efforts = provider ? effortSelect(provider.id, draft.model || options.defaultModel(provider.id), draft.reasoningEffort) : '';
     const cards = SUGGESTIONS.map(item => `<li><button type="button" class="bc-card" data-suggestion="${item.id}" aria-pressed="${item.id === draft.suggestion}">${botAvatarHtml(item.avatar, item.name, 'bc-card-avatar')}<b>${escape(item.name)}</b><small>${escape(item.role)}</small></button></li>`).join('');
-    return `<div class="bots-create"><form class="bots-form bc-form" novalidate aria-label=t("New bot")>
+    return `<div class="bots-create"><form class="bots-form bc-form" novalidate aria-label="${t('New bot')}">
       <div class="bc-preview">${botAvatarHtml(draft.avatar, draft.name || 'Bot', 'bc-avatar', draft.color)}</div>
       ${colorPicker(draft.color)}${avatarPicker(draft.avatar, draft.color)}
       <label class="bots-field"><span>Name<i class="bc-required" aria-hidden="true">*</i></span><input name="name" maxlength="60" required aria-required="true" value="${escape(draft.name)}" placeholder="Scout" autocomplete="off" ${nameError ? 'aria-invalid="true" aria-describedby="bc-name-error"' : ''}></label>
@@ -333,7 +333,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
     const items = backups.map((item, index) => `<li><span>${escape(label(item))}</span>
       <button type="button" class="icon-button" data-backup-move="${index}" data-step="-1" aria-label="Move ${escape(label(item))} up" title="Move up" ${index === 0 ? 'disabled' : ''}>${icon('down', 'flip')}</button>
       <button type="button" class="icon-button" data-backup-move="${index}" data-step="1" aria-label="Move ${escape(label(item))} down" title="Move down" ${index === backups.length - 1 ? 'disabled' : ''}>${icon('down')}</button>
-      <button type="button" class="icon-button" data-backup-remove="${index}" aria-label="Remove ${escape(label(item))}" title=t("Remove")>${icon('close')}</button></li>`).join('');
+      <button type="button" class="icon-button" data-backup-remove="${index}" aria-label="Remove ${escape(label(item))}" title="${t('Remove')}">${icon('close')}</button></li>`).join('');
     const taken = (provider: ProviderId, model: string) => (provider === bot.provider && model === bot.model) || backups.some(item => item.provider === provider && item.model === model);
     const groups = installed().map(provider => {
       const models = botModelChoices(provider.id, catalogFor(provider.id), '').filter(model => model.id !== 'default' && !taken(provider.id, model.id));
@@ -352,20 +352,20 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
   function renderProfile(bot: Bot): string {
     const { provider, harness, model } = harnessControls(bot.provider, bot.model, false);
     const mode = permissionChoices(bot.provider, bot.mode).some(item => item.id === bot.mode) ? bot.mode : 'ask';
-    const checkIns = `<select name="heartbeatMinutes" aria-label=t("Check-ins")>${CHECK_INS.map(item => `<option value="${item.minutes}" ${item.minutes === bot.heartbeatMinutes ? 'selected' : ''}>${item.label}</option>`).join('')}</select>`;
+    const checkIns = `<select name="heartbeatMinutes" aria-label="${t('Check-ins')}">${CHECK_INS.map(item => `<option value="${item.minutes}" ${item.minutes === bot.heartbeatMinutes ? 'selected' : ''}>${item.label}</option>`).join('')}</select>`;
     const toggle = (name: string, on: boolean, label: string) => `<input type="checkbox" class="bots-switch" name="${name}" ${on ? 'checked' : ''} aria-label="${label}">`;
     const pop = avatarOpen ? `<div class="bp-avatar-pop" role="dialog" aria-label="Icon">
         <button type="button" class="secondary-button" data-bots-action="avatar-upload">${icon('upload')}Upload image</button>
         <h5>Choose panda</h5>${avatarPicker(bot.avatar, bot.color ?? '')}<h5>Color</h5>${colorPicker(bot.color ?? '')}
         <button type="button" class="bp-avatar-reset" data-bots-action="avatar-reset">${icon('reset')}Reset</button></div>`
       : `<input type="hidden" name="avatar" value="${escape(bot.avatar)}"><input type="hidden" name="color" value="${escape(bot.color ?? '')}">`;
-    return `<form class="bots-form bots-profile" novalidate aria-label=t("Profile")>
+    return `<form class="bots-form bots-profile" novalidate aria-label="${t('Profile')}">
       <div class="bp-identity"><span class="bp-avatar-wrap"><button type="button" class="bp-avatar-button" data-bots-action="avatar" aria-haspopup="dialog" aria-expanded="${avatarOpen}" aria-label="Change icon">${avatar(bot, 'bp-avatar')}<span class="bp-avatar-badge">${icon('edit')}</span></button>${pop}</span>
-        <div class="bp-identity-fields"><input name="name" maxlength="60" required value="${escape(bot.name)}" placeholder=t("Name") aria-label=t("Name") autocomplete="off"><input name="role" maxlength="200" value="${escape(bot.role)}" placeholder="Title, like Research assistant" aria-label="Title" autocomplete="off"><p class="bc-error" id="bp-name-error" hidden></p></div></div>
-      ${card(t('Instructions'), `<label class="bs-row stacked bots-instructions"><span class="bs-row-text"><small>How it should work, what to always or never do</small></span><textarea name="instructions" rows="4" maxlength="16000" aria-label=t("Instructions")>${escape(bot.instructions)}</textarea></label>`)}
+        <div class="bp-identity-fields"><input name="name" maxlength="60" required value="${escape(bot.name)}" placeholder="${t('Name')}" aria-label="${t('Name')}" autocomplete="off"><input name="role" maxlength="200" value="${escape(bot.role)}" placeholder="Title, like Research assistant" aria-label="Title" autocomplete="off"><p class="bc-error" id="bp-name-error" hidden></p></div></div>
+      ${card(t('Instructions'), `<label class="bs-row stacked bots-instructions"><span class="bs-row-text"><small>How it should work, what to always or never do</small></span><textarea name="instructions" rows="4" maxlength="16000" aria-label="${t('Instructions')}">${escape(bot.instructions)}</textarea></label>`)}
       ${card(t('Personality'), `
         <div class="bs-row stacked bots-soul"><span class="bs-row-text"><strong>Soul</strong><small>Markdown, up to 64 KB</small></span>
-          <textarea name="soul" rows="4" aria-label=t("Soul") placeholder="# Leo&#10;Dry wit, fiercely loyal, blunt under pressure.">${escape(bot.soul ?? '')}</textarea>
+          <textarea name="soul" rows="4" aria-label="${t('Soul')}" placeholder="# Leo&#10;Dry wit, fiercely loyal, blunt under pressure.">${escape(bot.soul ?? '')}</textarea>
           <span class="bots-soul-actions"><button type="button" class="secondary-button" data-bots-action="soul-import">Import soul.md…</button><button type="button" class="secondary-button" data-bots-action="soul-remove" ${bot.soul ? '' : 'hidden'}>Remove</button><input type="file" data-soul-file accept=".md,.markdown,.txt,text/markdown,text/plain" hidden></span>
           <p class="bots-error bots-soul-error" role="alert" hidden></p>
         </div>`, infoMark(t('Optional. Tone, values and conversational style, kept apart from the instructions. Importing copies the file once; later changes to the file do not change the bot. Personality never grants tools or permissions.'), t('About personality')))}
@@ -374,7 +374,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
         ${backupsRow(bot)}`)}
       ${card(t('Rules'), `
         <input type="hidden" name="mode" value="${escape(mode)}">
-        <div class="bp-rules-row"><div class="bs-row-text"><strong>How it can work</strong><small>Choose when PandaCode asks before a change.</small></div><div class="bp-rule-options" role="radiogroup" aria-label=t("Rules")>${permissionOptions(bot.provider, mode)}</div></div>
+        <div class="bp-rules-row"><div class="bs-row-text"><strong>How it can work</strong><small>Choose when PandaCode asks before a change.</small></div><div class="bp-rule-options" role="radiogroup" aria-label="${t('Rules')}">${permissionOptions(bot.provider, mode)}</div></div>
         ${row(t('Notifications'), t('Message you when it finishes work you were not watching'), toggle('notify', bot.notify !== false, t('Notifications')))}
         <details class="bs-advanced" ${advancedOpen ? 'open' : ''}><summary>Advanced</summary>
           ${row('While working', 'What a new message does while the bot is busy', `<select name="whileWorking" aria-label="While working"><option value="queue" ${bot.whileWorking !== 'steer' ? 'selected' : ''}>Queue it</option><option value="steer" ${bot.whileWorking === 'steer' ? 'selected' : ''}>Steer the current work</option></select>`)}
@@ -382,7 +382,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
         </details>`)}
       ${card(t('Check-ins'), `
         ${row(t('Check in'), '', checkIns)}
-        ${row(t('Standing goals'), t('One per line. Check-ins work toward these.'), `<textarea name="goals" rows="2" maxlength="16000" aria-label=t("Standing goals")>${escape(bot.goals)}</textarea>`, true)}`, infoMark(t('On each check-in the bot reviews its goals and memory using read-only steps, and messages you only when something needs attention.'), t('About check-ins')))}
+        ${row(t('Standing goals'), t('One per line. Check-ins work toward these.'), `<textarea name="goals" rows="2" maxlength="16000" aria-label="${t('Standing goals')}">${escape(bot.goals)}</textarea>`, true)}`, infoMark(t('On each check-in the bot reviews its goals and memory using read-only steps, and messages you only when something needs attention.'), t('About check-ins')))}
     </form>`;
   }
 
@@ -476,8 +476,8 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
       <div class="bp-actions">
         <button type="button" class="secondary-button bp-open" data-bots-action="open-chat">${icon('chat')}<span>Open chat</span></button>
         <button type="button" class="icon-button" data-bots-action="pause" aria-label="${bot.paused ? t('Resume') : t('Pause')}" title="${bot.paused ? t('Resume: schedules, check-ins and channels continue') : t('Pause: stop work and hold schedules and messages')}" aria-pressed="${bot.paused}">${icon(bot.paused ? 'play' : 'pause')}</button>
-        <span class="bp-more"><button type="button" class="icon-button" data-bots-action="more" aria-label=t("More") title=t("More") aria-haspopup="menu" aria-expanded="${moreOpen}">${icon('more')}</button>
-        ${moreOpen ? `<span class="bp-menu" role="menu"><button type="button" role="menuitem" data-bots-action="reset" aria-label=t("Reset bot")>${icon('reset')}Reset…<small>Forget conversations, memories and schedules</small></button><button type="button" role="menuitem" class="danger" data-bots-action="delete" aria-label=t("Delete bot")>${icon('trash')}Delete…<small>Remove the bot and its channels</small></button></span>` : ''}</span>
+        <span class="bp-more"><button type="button" class="icon-button" data-bots-action="more" aria-label="${t('More')}" title="${t('More')}" aria-haspopup="menu" aria-expanded="${moreOpen}">${icon('more')}</button>
+        ${moreOpen ? `<span class="bp-menu" role="menu"><button type="button" role="menuitem" data-bots-action="reset" aria-label="${t('Reset bot')}">${icon('reset')}Reset…<small>Forget conversations, memories and schedules</small></button><button type="button" role="menuitem" class="danger" data-bots-action="delete" aria-label="${t('Delete bot')}">${icon('trash')}Delete…<small>Remove the bot and its channels</small></button></span>` : ''}</span>
       </div></header>
       ${bot.paused ? '<p class="bots-banner">Paused. Schedules and check-ins wait until you resume; new messages get a paused reply.</p>' : ''}`;
   }
@@ -514,7 +514,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
       const list = pane.querySelector<HTMLElement>('.bc-rail');
       if (list) { list.scrollLeft = rail; railFades(list); }
     } else {
-      const nav = `<div class="bs-nav" role="tablist" aria-orientation="vertical" aria-label=t("Bot settings")>${SECTIONS.map(item => `<button type="button" role="tab" id="bs-tab-${item.id}" data-section="${item.id}" aria-controls="bs-panel" aria-selected="${item.id === section}" tabindex="${item.id === section ? 0 : -1}">${icon(item.icon)}<span>${item.label}</span>${badge(item.id)}</button>`).join('')}</div>`;
+      const nav = `<div class="bs-nav" role="tablist" aria-orientation="vertical" aria-label="${t('Bot settings')}">${SECTIONS.map(item => `<button type="button" role="tab" id="bs-tab-${item.id}" data-section="${item.id}" aria-controls="bs-panel" aria-selected="${item.id === section}" tabindex="${item.id === section ? 0 : -1}">${icon(item.icon)}<span>${item.label}</span>${badge(item.id)}</button>`).join('')}</div>`;
       const current = SECTIONS.find(item => item.id === section)!;
       const body = section === 'profile' ? renderProfile(detail.bot)
         : section === 'activity' ? `${heading(t('Conversations'))}${renderPanel('conversations', detail, context)}${heading(t('Rules'), infoMark('Answer the bot\'s requests for you. Deny wins over allow, and * matches anything, as in npm test*. Risky actions such as sudo, force pushes, deleting files or anything about passwords always ask, whatever the rules say.', t('About rules')))}${renderPanel('rules', detail, context)}${heading(t('Activity log'))}${renderPanel('activity', detail, context)}`
@@ -651,7 +651,7 @@ export function mountBots(host: HTMLElement, options: BotsOptions): BotsView {
     }
     if (provider && mode) {
       if (!permissionChoices(provider.id, mode.value).some(item => item.id === mode.value)) mode.value = 'ask';
-      const group = form.querySelector<HTMLElement>('[role=radiogroup][aria-label=t("Rules")]');
+      const group = form.querySelector<HTMLElement>(`[role=radiogroup][aria-label="${t('Rules')}"]`);
       if (group) group.innerHTML = permissionOptions(provider.id, mode.value);
     }
     syncEfforts(form);

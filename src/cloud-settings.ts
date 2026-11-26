@@ -148,7 +148,7 @@ export function mountCloudSettings(host: HTMLElement, options: CloudSettingsHost
       <p class="cloud-progress cloud-row-status" role="status" hidden></p>
       ${id === 'colab' ? colabSignInRow() : ''}<div class="cloud-inherit" data-inherit-row hidden><label><input type="checkbox" data-cloud-inherit> Include provider environment variables</label>${infoMark(INHERIT_HELP, t('About inheriting environment variables'))}</div>${id === 'colab' ? colabConfigBlock() : ''}${id === 'instabox' ? `
       <div class="cloud-image" hidden>
-        <div class="cloud-image-row"><label><span>Machine image</span><select aria-label=t("InstaBox machine image") disabled></select></label>${infoMark(IMAGE_HELP, t('About machine images'))}</div>
+        <div class="cloud-image-row"><label><span>Machine image</span><select aria-label="${t('InstaBox machine image')}" disabled></select></label>${infoMark(IMAGE_HELP, t('About machine images'))}</div>
         <p class="cloud-image-status" role="status" hidden></p>
         <p class="cloud-image-error" role="alert" hidden></p>
         <div class="cloud-actions" hidden><button type="button" class="secondary-button" data-cloud="images">Try again</button></div>
@@ -171,12 +171,12 @@ export function mountCloudSettings(host: HTMLElement, options: CloudSettingsHost
     </div>`;
   };
   // The keyed long tail folds away; the fold opens by itself once one of them is connected.
-  host.innerHTML = `<div class="settings-group cloud-settings" aria-label=t("Cloud providers")>${ids.filter(id => !(id in KEYED)).map(providerRow).join('')}</div>
-    <details class="settings-fold cloud-more"><summary><h3>More cloud machines</h3>${icon('chevron')}</summary><div class="settings-group cloud-settings" aria-label=t("More cloud machines")>${ids.filter(id => id in KEYED).map(providerRow).join('')}</div></details>
-    <details class="settings-fold"><summary><h3>Advanced</h3>${icon('chevron')}</summary><div class="settings-group cloud-settings" aria-label=t("Cloud sandboxes")><div class="cloud-provider cloud-claude">
+  host.innerHTML = `<div class="settings-group cloud-settings" aria-label="${t('Cloud providers')}">${ids.filter(id => !(id in KEYED)).map(providerRow).join('')}</div>
+    <details class="settings-fold cloud-more"><summary><h3>More cloud machines</h3>${icon('chevron')}</summary><div class="settings-group cloud-settings" aria-label="${t('More cloud machines')}">${ids.filter(id => id in KEYED).map(providerRow).join('')}</div></details>
+    <details class="settings-fold"><summary><h3>Advanced</h3>${icon('chevron')}</summary><div class="settings-group cloud-settings" aria-label="${t('Cloud sandboxes')}"><div class="cloud-provider cloud-claude">
       <div class="setting-row"><div><strong>Claude login for cloud agents</strong>${infoMark(CLAUDE_TOKEN_HELP, t('About the Claude login'))}</div></div>
-      <form class="cloud-form cloud-claude-form" novalidate aria-label=t("Claude login for cloud agents")>
-        <label><span>Token</span><input name="token" type="password" autocomplete="off" spellcheck="false" placeholder=t("From claude setup-token") aria-label=t("Claude token for cloud agents") required></label>
+      <form class="cloud-form cloud-claude-form" novalidate aria-label="${t('Claude login for cloud agents')}">
+        <label><span>Token</span><input name="token" type="password" autocomplete="off" spellcheck="false" placeholder="${t('From claude setup-token')}" aria-label="${t('Claude token for cloud agents')}" required></label>
         <p class="cloud-progress" role="status" hidden></p>
         <p class="cloud-error" role="alert" hidden></p>
         <div class="cloud-actions"><button type="submit" class="primary-button">Save token</button></div>

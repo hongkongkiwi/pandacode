@@ -49,8 +49,8 @@ function attachmentLabel(entry: QueuedMessage): string {
 function row(entry: QueuedMessage, index: number, view: QueueView): string {
   const last = index === view.entries.length - 1;
   if (entry.id === view.editingId) {
-    return `<li class="queue-row editing" data-queue-id="${escape(entry.id)}"><div class="queue-edit-head"><span class="queue-badge">${t('Editing')}</span><span class="queue-edit-notice" role="note">${t('You are editing a queued message. Save or cancel the edit to let it run.')}</span></div><textarea class="queue-edit" aria-label="t('Edit queued message')" rows="2">${escape(entry.text)}</textarea>
-      <div class="queue-edit-actions"><button type="button" class="secondary-button" data-action="queue-cancel">t('Cancel edit')</button><button type="button" class="primary-button" data-action="queue-save">t('Save')</button></div></li>`;
+    return `<li class="queue-row editing" data-queue-id="${escape(entry.id)}"><div class="queue-edit-head"><span class="queue-badge">${t('Editing')}</span><span class="queue-edit-notice" role="note">${t('You are editing a queued message. Save or cancel the edit to let it run.')}</span></div><textarea class="queue-edit" aria-label="${t('Edit queued message')}" rows="2">${escape(entry.text)}</textarea>
+      <div class="queue-edit-actions"><button type="button" class="secondary-button" data-action="queue-cancel">${t('Cancel edit')}</button><button type="button" class="primary-button" data-action="queue-save">${t('Save')}</button></div></li>`;
   }
   const preview = escape(entry.text.slice(0, 60));
   if (view.steering.has(entry.id)) {
@@ -75,7 +75,7 @@ export function queuePanel(view: QueueView): string {
   const resume = view.hold === 'limited' ? '' : `<button type="button" class="queue-resume" data-action="queue-resume" ${view.busy ? 'disabled' : ''}>${view.running ? t('Resume after this run') : t('Resume')}</button>`;
   const status = view.hold ? `<span class="queue-hold">${HOLD_LABEL[view.hold]}</span>${resume}`
     : `<span class="queue-next">${view.running ? (view.agentName ? t`Waiting – ${escape(view.agentName)} is working` : t('Sends when the agent finishes')) : `${SPINNER}t('Sending next…')`}</span>`;
-  return `<section class="queue-panel" aria-label="t('Queued messages')"><header class="queue-heading"><strong>t('Queued')</strong><span class="queue-count">${count}</span>${status}</header><ol class="queue-list">${view.entries.map((entry, index) => row(entry, index, view)).join('')}</ol></section>`;
+  return `<section class="queue-panel" aria-label="${t('Queued messages')}"><header class="queue-heading"><strong>${t('Queued')}</strong><span class="queue-count">${count}</span>${status}</header><ol class="queue-list">${view.entries.map((entry, index) => row(entry, index, view)).join('')}</ol></section>`;
 }
 
 /** The order of ids once `id` has moved to `target`: dragged down it lands after that row, dragged up before it. */

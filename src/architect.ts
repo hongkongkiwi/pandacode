@@ -49,7 +49,7 @@ export function openArchitectSetup(anchor: HTMLElement, load: () => Promise<Setu
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', t('Architect & workers'));
   panel.tabIndex = -1;
-  panel.innerHTML = `<header class="architect-setup-heading"><h2>Architect & workers</h2><button type="button" class="icon-button" aria-label=t("Close dialog")>${icon('close')}</button></header><div class="architect-setup-scroll"><div id="architect-setup-host"><p class="architect-loading" role="status">Loading team setup…</p></div></div>`;
+  panel.innerHTML = `<header class="architect-setup-heading"><h2>Architect & workers</h2><button type="button" class="icon-button" aria-label="${t('Close dialog')}">${icon('close')}</button></header><div class="architect-setup-scroll"><div id="architect-setup-host"><p class="architect-loading" role="status">Loading team setup…</p></div></div>`;
   const host = panel.querySelector<HTMLElement>('#architect-setup-host')!;
   let closed = false, frame = 0, setup: SetupController | undefined;
   const expanded = anchor.getAttribute('aria-expanded'), controls = anchor.getAttribute('aria-controls');
