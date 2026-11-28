@@ -5,6 +5,8 @@ import type { BotDetail, Channel, ChannelKind } from './bots';
 import type { PanelContext } from './bots-panels';
 
 export interface Identity { name: string; link: string | null; invite: string | null; warnings: string[] }
+/** What a bridge adapter needs, returned only by the explicit setup action. */
+export interface Setup { url: string; channelId: string; token: string; env: string; remote: boolean }
 interface Field { name: string; label: string; secret: boolean; placeholder: string; config?: boolean }
 interface Step { title: string; body: string; field?: Field }
 /** Everything that differs between channel kinds, in one place.
@@ -77,6 +79,14 @@ export const KINDS: ChannelSpec[] = [
       { title: 'Copy an access token', body: `The temporary token on API Setup works for 24 hours. For one that lasts, create a system user with WhatsApp permissions and generate its token. ${link('https://business.facebook.com/settings/system-users', 'System users')}`, field: { name: 'access_token', label: 'Access token', secret: true, placeholder: 'EAAG…' } },
       { title: 'Copy the app secret', body: 'Open <b>App settings</b> → <b>Basic</b> → <b>App secret</b> → <b>Show</b>. PandaCode uses it to check that messages really come from Meta.', field: { name: 'signing_secret', label: 'App secret', secret: true, placeholder: '32 characters' } },
       { title: 'Connect, then point Meta at this computer', body: 'After you connect, the steps for the webhook (with everything to copy) appear on the channel.' },
+    ],
+  },
+  {
+    id: 'bridge', label: 'Bridge', blurb: 'Signal, Mattermost, Matrix, ntfy and more through a tool you run', minutes: '3 min', secrets: [], acceptsPublicUrl: true,
+    steps: () => [
+      { title: 'Connect it to get a token', body: 'A bridge is one connector for every chat platform PandaCode does not speak natively. It gives you a private token and an endpoint; a small adapter you run — <code>signal-cli</code>, a Mattermost bot, an ntfy subscriber, or a shell script — carries messages across. Nothing on that platform is exposed unless you put this behind a tunnel.' },
+      { title: 'Run the helper', body: 'The setup on the channel gives you three exports and a copy of <code>pandacode-bridge.sh</code>. Its <code>send</code> command posts one message in, and <code>listen</code> prints replies as JSON, one per line, ready to post to your platform.' },
+      { title: 'Pair the sender', body: 'The first message from anyone other than you shows a four-digit code under <b>People</b>; approve it and they can talk to the bot. If your bridge token ever leaks, rotate it on the channel and old adapters stop working.' },
     ],
   },
 ];
@@ -154,6 +164,19 @@ export function channelGuide(detail: BotDetail, channel: Channel): string {
         <li><b>In Meta</b>, open WhatsApp → <b>Configuration</b> → Webhook → <b>Edit</b> and paste:${callback ? `${copy(callback, 'Copy', 'Callback URL')}` : ' <i>(the callback URL appears here after you save the address)</i>'}${copy(String(channel.config.verifyToken ?? ''), 'Copy', 'Verify token')}Press <b>Verify and save</b>, then under Webhook fields press <b>Manage</b> and subscribe to <b>messages</b>. The status above turns to “Webhook verified”.</li>
         <li>${identity?.link ? link(identity.link, 'Message your WhatsApp number') : 'Message your WhatsApp business number from your phone.'}</li>${pairStep}</ol>`; break;
     }
+    case 'bridge': {
+      // The endpoint and token are fetched on demand, never in the listing, so they are
+      // revealed by an explicit action rather than being rendered with the panel.
+      const endpoint = publicUrl || `http://127.0.0.1:${port}`;
+      body = `<ol>
+        <li><button type="button" class="primary-button bots-step-button" data-bridge-setup="${escape(channel.id)}">Show setup and copy exports</button> Copies the three variables the helper reads, including this channel’s token.</li>
+        <li><b>Run your adapter</b> next to the platform you are bridging. The endpoint is <code>${escape(endpoint)}/api/bridge/${escape(channel.id)}</code>: <code>POST …/messages</code> carries a message in and <code>GET …/events</code> long-polls replies. The helper script in <code>examples/pandacode-bridge.sh</code> is a plain <code>curl</code> client with no dependency.</li>
+        <li><b>Where does it land?</b> A bridge can run entirely on this computer (a local <code>signal-cli</code>, a Tunnel-free Mattermost bot on your LAN). A platform that must call you from the internet needs a tunnel first.${copy(`tailscale serve --bg ${port}`, 'Copy', 'Or run')}</li>
+        <li><label class="bots-switch-row"><input type="checkbox" class="bots-switch" data-remote="${escape(channel.id)}" ${channel.config.remote ? 'checked' : ''}><span><b>Accept calls through a tunnel</b><small>Otherwise only this computer may post. The token is still required either way.</small></span></label></li>
+        ${channel.config.remote ? `<li><label class="bots-field"><span>Paste the public https address</span><span class="bots-inline-form"><input data-public-url="${escape(channel.id)}" placeholder="https://….trycloudflare.com" value="${escape(typedUrl)}" autocomplete="off" spellcheck="false"><button type="button" class="secondary-button" data-save-public="${escape(channel.id)}">Save</button></span></label></li>` : ''}
+        <li><button type="button" class="secondary-button bots-step-button" data-bridge-rotate="${escape(channel.id)}">New token</button> Replaces the token and stops any adapter still using the old one.</li>
+        ${pairStep}</ol>`; break;
+    }
     case 'web':
       body = `<ol><li><button type="button" class="primary-button bots-step-button" data-web-open="${escape(channel.id)}">Open web chat</button> On this computer, that’s it.</li>
         <li><label class="bots-switch-row"><input type="checkbox" class="bots-switch" data-remote="${escape(channel.id)}" ${channel.config.remote ? 'checked' : ''}><span><b>Use from my phone and other devices</b><small>Allows the page through a private tunnel. The link still works only with its token.</small></span></label></li>
@@ -161,12 +184,14 @@ export function channelGuide(detail: BotDetail, channel: Channel): string {
         <li><label class="bots-field"><span>Paste that https address</span><span class="bots-inline-form"><input data-public-url="${escape(channel.id)}" placeholder="https://your-mac.tailnet.ts.net" value="${escape(typedUrl)}" autocomplete="off" spellcheck="false"><button type="button" class="secondary-button" data-save-public="${escape(channel.id)}">Save</button></span></label></li>
         ${publicUrl ? `<li><button type="button" class="primary-button bots-step-button" data-phone-link="${escape(channel.id)}">Copy link for my phone</button> Open it on your phone; add it to your home screen to use it like an app.</li>` : ''}` : ''}</ol>`; break;
   }
-  const fallback = channel.kind === 'web' ? Boolean(channel.config.remote) : !paired;
+  const fallback = channel.kind === 'web' || channel.kind === 'bridge' ? Boolean(channel.config.remote) : !paired;
   const open = guides.get(channel.id) ?? fallback;
   return `${warnings}<details class="bots-guide" data-guide="${escape(channel.id)}" data-default="${fallback ? 'open' : 'closed'}" ${open ? 'open' : ''}><summary>${channel.kind === 'web' ? 'How to use' : paired ? 'How to use' : 'Finish setting up'}</summary>${body}</details>`;
 }
 
 async function webLink(context: PanelContext, channelId: string): Promise<string> { return context.call<string>('bot_web_link', { channelId }); }
+
+export async function bridgeSetup(context: PanelContext, channelId: string): Promise<Setup> { return context.call<Setup>('bot_bridge_setup', { channelId }); }
 
 /** Returns true when the click was a setup action. */
 export function connectClick(target: HTMLElement, context: PanelContext): boolean {
@@ -186,6 +211,17 @@ export function connectClick(target: HTMLElement, context: PanelContext): boolea
     return true;
   }
   if (data.webOpen) { void context.work(async () => { await context.call('open_external_url', { url: await webLink(context, data.webOpen!) }); }); return true; }
+  if (data.bridgeSetup) {
+    void context.work(async () => { await navigator.clipboard.writeText((await bridgeSetup(context, data.bridgeSetup!)).env); context.notify('Setup copied. Paste it where your adapter runs.'); });
+    return true;
+  }
+  if (data.bridgeRotate) {
+    context.confirm('Create a new bridge token?', 'Any adapter still using the current token stops working right away. Use this if it was shared by mistake.', 'New token', async () => {
+      await navigator.clipboard.writeText((await context.call<Setup>('bot_bridge_new_token', { channelId: data.bridgeRotate })).env);
+      await done('New token copied');
+    });
+    return true;
+  }
   if (data.webCopy) { void context.work(async () => { await navigator.clipboard.writeText(await webLink(context, data.webCopy!)); context.notify('Private link copied. Anyone with it can talk to this bot.'); }); return true; }
   if (data.webRotate) { context.confirm('Create a new web chat link?', 'Pages opened with the current link stop working right away. Use this if the link was shared by mistake.', 'New link', async () => { await navigator.clipboard.writeText(await context.call<string>('bot_web_new_link', { channelId: data.webRotate })); await done('New link copied'); }); return true; }
   if (data.phoneLink) {

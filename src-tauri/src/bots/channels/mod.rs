@@ -3,6 +3,7 @@
 //! loop. Senders must be paired before they can drive the bot; secrets stay in the
 //! OS secure store.
 
+pub(crate) mod bridge;
 pub(crate) mod discord;
 pub(crate) mod http;
 pub(crate) mod slack;
@@ -168,6 +169,10 @@ pub(crate) const KINDS: &[Kind] = &[
     Kind { id: "slack", label: "Slack", transport: Transport::Socket, secrets: &["token", "app_token"], limit: 3500, direct_thread_prefix: None, status_when_idle: "", check: check_slack, prepare: no_prepare },
     Kind { id: "discord", label: "Discord", transport: Transport::Socket, secrets: &["token"], limit: 1900, direct_thread_prefix: Some("dm:"), status_when_idle: "", check: check_discord, prepare: no_prepare },
     Kind { id: "whatsapp", label: "WhatsApp", transport: Transport::Webhook, secrets: &["access_token", "signing_secret"], limit: 4000, direct_thread_prefix: None, status_when_idle: "Waiting for webhook calls", check: check_whatsapp, prepare: prepare_whatsapp },
+    // One connector for every platform PandaCode does not speak natively: an adapter the
+    // user already runs (signal-cli, a Mattermost bot, an ntfy subscriber) normalizes to the
+    // bridge contract. Its token is minted at creation, like web chat's.
+    Kind { id: "bridge", label: "Bridge", transport: Transport::Webhook, secrets: &[], limit: 20_000, direct_thread_prefix: None, status_when_idle: "Waiting for your bridge", check: no_check, prepare: no_prepare },
 ];
 
 /// The kind with this id, or `None` for anything not registered.
@@ -230,6 +235,9 @@ pub(crate) async fn verify(input: &ChannelInput) -> Result<Identity> {
         "discord" => discord::verify(input.secret("token")).await,
         "whatsapp" => whatsapp::verify(input.config["phoneNumberId"].as_str().unwrap_or_default(), input.secret("access_token")).await,
         "web" => Ok(Identity { name: "Web chat on this computer".into(), ..Default::default() }),
+        // A bridge has no remote service to check: its token is ours, and the adapter it
+        // talks to is the user's own.
+        "bridge" => Ok(Identity { name: "Bridge adapter".into(), ..Default::default() }),
         _ => Err(choose_channel()),
     };
     result.map_err(|error| error.trim_start_matches("auth:").to_owned())
@@ -287,6 +295,12 @@ pub(crate) fn add(store: &Store, bot_id: &str, input: &ChannelInput) -> Result<C
             secrets::set(&id, name, value)?;
             saved.push(name.clone());
         }
+    }
+    // A bridge token is minted here unless the caller supplied one (a headless import does),
+    // and never listed back: only the setup action returns it.
+    if input.kind == "bridge" && !saved.iter().any(|name| name == "token") {
+        secrets::set(&id, "token", &bridge::new_token())?;
+        saved.push("token".into());
     }
     saved.sort();
     let token = (input.kind == "web").then(web::new_token);
@@ -412,6 +426,7 @@ pub(crate) async fn send(app: &tauri::AppHandle, channel_id: &str, thread: &str,
     for part in chunks(text, limit(&channel.kind)) {
         match channel.kind.as_str() {
             "web" => web::send(&channel, thread, &part),
+            "bridge" => bridge::send(app, &channel, thread, &part),
             "telegram" => telegram::send(&channel, thread, &part).await,
             "slack" => slack::send(&channel, thread, &part).await,
             "discord" => discord::send(&channel, thread, &part).await,
@@ -559,7 +574,7 @@ pub(crate) fn configure(store: &Store, channel_id: &str, patch: &Value) -> Resul
     let mut config = channel.config.clone();
     for (key, value) in patch.as_object().ok_or("Send settings as an object.")? {
         match key.as_str() {
-            "remote" if channel.kind == "web" => config["remote"] = json!(value.as_bool().ok_or("Remote access is on or off.")?),
+            "remote" if channel.kind == "web" || channel.kind == "bridge" => config["remote"] = json!(value.as_bool().ok_or("Remote access is on or off.")?),
             "publicUrl" if kind(&channel.kind).is_some_and(accepts_public_url) => {
                 let url = value.as_str().unwrap_or_default().trim().trim_end_matches('/');
                 if !url.is_empty() {
@@ -631,6 +646,59 @@ pub(crate) fn direct_thread(id: &str, sender_id: &str) -> String {
         Some(prefix) => format!("{prefix}{sender_id}"),
         None => sender_id.to_owned(),
     }
+}
+
+/// What an adapter needs to reach one bridge channel, assembled into copyable exports.
+///
+/// The token is only ever returned from here and from [`bot_bridge_new_token`], never from
+/// [`list`]: a channel listing must not be able to leak it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeSetup {
+    pub url: String,
+    pub channel_id: String,
+    pub token: String,
+    /// Ready to paste into a shell: the three variables the helper reads.
+    pub env: String,
+    /// True when the address is a public tunnel rather than this computer.
+    pub remote: bool,
+}
+
+fn bridge_setup(app: &tauri::AppHandle, channel: &Channel) -> Result<BridgeSetup> {
+    if channel.kind != "bridge" {
+        return Err("Only bridge channels have a setup.".into());
+    }
+    let port = http::ensure_server(app.clone());
+    let token = secrets::get(&channel.id, "token").ok_or("This bridge's token is missing. Create a new one.")?;
+    let public = channel.config["publicUrl"].as_str().unwrap_or_default().trim_end_matches('/').to_owned();
+    let remote = !public.is_empty();
+    let url = if remote { public } else { format!("http://127.0.0.1:{port}") };
+    let env = format!(
+        "export PANDACODE_BRIDGE_URL='{url}'\nexport PANDACODE_BRIDGE_CHANNEL='{}'\nexport PANDACODE_BRIDGE_TOKEN='{token}'",
+        channel.id
+    );
+    Ok(BridgeSetup { url, channel_id: channel.id.clone(), token, env, remote })
+}
+
+#[tauri::command]
+pub async fn bot_bridge_setup(app: tauri::AppHandle, state: State<'_, AppState>, channel_id: String) -> Result<BridgeSetup> {
+    let channel = get(&*state.store.lock().map_err(|e| e.to_string())?, &channel_id)?;
+    bridge_setup(&app, &channel)
+}
+
+/// Replaces a bridge channel's token; adapters still using the old one stop working.
+#[tauri::command]
+pub async fn bot_bridge_new_token(app: tauri::AppHandle, state: State<'_, AppState>, channel_id: String) -> Result<BridgeSetup> {
+    {
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        let channel = get(&store, &channel_id)?;
+        if channel.kind != "bridge" {
+            return Err("Only bridge channels have a token.".into());
+        }
+        secrets::set(&channel.id, "token", &bridge::new_token())?;
+        super::log(&store, &channel.bot_id, "channel", "Created a new bridge token; old adapters stopped working", json!({"channelId": channel.id}))?;
+    }
+    bot_bridge_setup(app, state, channel_id).await
 }
 
 /// The web chat link for a web channel, including its access token.
